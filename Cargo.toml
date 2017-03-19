@@ -1,7 +1,13 @@
 [package]
 name = "rxor"
+description = "CLI app that implements basic XOR encryption/decryption"
+keywords = ["XOR", "encryption", "decryption", "CLI", "terminal"]
+categories = ["cryptography", "command-line-utilities"]
 version = "0.1.0"
 authors = ["gavyn <gavyn.riebau@gmail.com>"]
+documentation = "https://github.com/gavynriebau/rxor"
+homepage = "https://github.com/gavynriebau/rxor"
+license = "MIT"
 
 [dependencies]
 clap = "2.21.1"
