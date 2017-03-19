@@ -3,9 +3,8 @@ extern crate clap;
 
 use clap::{App, Arg};
 use std::io;
-use std::io::BufRead;
-use std::io::BufReader;
 use std::fs::File;
+use std::io::Write;
 
 fn main() {
 
@@ -29,31 +28,43 @@ fn main() {
      .get_matches();
 
     let key = matches.value_of("key").unwrap();
+    let key_bytes = key.as_bytes();
+    let key_len = key_bytes.len();
     let stdin = io::stdin();
 
     // If the "file" argument was supplied input will be read from the file, otherwise
     // input is read from stdin.
-    let input : Box<std::io::BufRead> = if matches.is_present("file") {
-        Box::new(BufReader::new(File::open(matches.value_of("file").unwrap()).unwrap()))
+    let mut input : Box<std::io::Read> = if matches.is_present("file") {
+        Box::new(File::open(matches.value_of("file").unwrap()).unwrap())
     } else {
         Box::new(stdin.lock())
     };
 
-    // TODO: Read chunks of input rather than lines (otherwise newline chars won't be encoded).
-    //
-    // Iterate each chunk of input and XOR it against the key.
-    for line in input.lines() {
-        let data = line.unwrap();
-        let data_bytes = data.into_bytes();
-        let key_bytes = key.as_bytes();
+    // Iterate each chunk of input data and XOR it against the provided key.
+    let mut key_idx = 0;
+    loop {
+        let mut data = [0; 1024];
+        let num_read = input.read(&mut data[..]).unwrap();
 
-        let k = key_bytes[0];
+        if num_read == 0 {
+            break;
+        }
 
+        let data_bytes = &data[0 .. num_read - 1];
         let mut encoded_bytes: Vec<u8> = Vec::new();
 
         for b in data_bytes {
+            let k = key_bytes[key_idx];
             let e = b ^ k;
+
             encoded_bytes.push(e);
+
+            key_idx += 1;
+
+            if key_idx >= key_len {
+                key_idx = key_idx % key_len;
+                let _ = writeln!(&mut std::io::stderr(), "Key wasn't long enough and had to be re-used to fully encode data, use a longer key to be secure.");
+            }
         }
 
         let encoded = String::from_utf8(encoded_bytes);
@@ -61,3 +72,4 @@ fn main() {
         println!("{}", encoded.unwrap());
     }
 }
+
