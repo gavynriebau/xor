@@ -42,6 +42,7 @@ fn main() {
 
     // Iterate each chunk of input data and XOR it against the provided key.
     let mut key_idx = 0;
+    let mut warning_shown = false;
     loop {
         let mut data = [0; 1024];
         let num_read = input.read(&mut data[..]).unwrap();
@@ -63,7 +64,11 @@ fn main() {
 
             if key_idx >= key_len {
                 key_idx = key_idx % key_len;
-                let _ = writeln!(&mut std::io::stderr(), "Key wasn't long enough and had to be re-used to fully encode data, use a longer key to be secure.");
+
+                if !warning_shown {
+                    warning_shown = true;
+                    let _ = writeln!(&mut std::io::stderr(), "Key wasn't long enough and had to be re-used to fully encode data, use a longer key to be secure.");
+                }
             }
         }
 
