@@ -4,7 +4,7 @@ extern crate clap;
 use clap::{App, Arg};
 use std::io;
 use std::fs::File;
-use std::io::Write;
+use std::io::{Write, Read};
 
 fn main() {
 
@@ -14,7 +14,7 @@ fn main() {
         .about("XORs input against a provided key")
         .author("Gavyn Riebau")
         .arg(Arg::with_name("key")
-             .help("The key against which input will be XOR'd. This should be larger than the given input data or will need to be repeated to encode the input data.")
+             .help("The file containing the key against which input will be XOR'd. This should be larger than the given input data or will need to be repeated to encode the input data.")
              .long("key")
              .short("k")
              .required(true)
@@ -27,9 +27,11 @@ fn main() {
              .value_name("FILE"))
      .get_matches();
 
-    let key = matches.value_of("key").unwrap();
-    let key_bytes = key.as_bytes();
-    let key_len = key_bytes.len();
+    // Read the entire key into memory
+    let mut key_file = File::open(matches.value_of("key").unwrap()).unwrap();
+    let mut key_bytes : Vec<u8> = Vec::new();
+    let key_len = key_file.read_to_end(&mut key_bytes).unwrap();
+
     let stdin = io::stdin();
     let mut key_idx = 0;
     let mut warning_shown = false;
