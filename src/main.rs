@@ -9,7 +9,7 @@ use std::io::Write;
 fn main() {
 
     // Parse arguments and provide help.
-    let matches = App::new("rxor")
+    let matches = App::new("xor")
         .version("1.0.0")
         .about("XORs input against a provided key")
         .author("Gavyn Riebau")
@@ -31,6 +31,8 @@ fn main() {
     let key_bytes = key.as_bytes();
     let key_len = key_bytes.len();
     let stdin = io::stdin();
+    let mut key_idx = 0;
+    let mut warning_shown = false;
 
     // If the "file" argument was supplied input will be read from the file, otherwise
     // input is read from stdin.
@@ -41,8 +43,6 @@ fn main() {
     };
 
     // Iterate each chunk of input data and XOR it against the provided key.
-    let mut key_idx = 0;
-    let mut warning_shown = false;
     loop {
         let mut data = [0; 1024];
         let num_read = input.read(&mut data[..]).unwrap();
@@ -77,4 +77,3 @@ fn main() {
         println!("{}", encoded.unwrap());
     }
 }
-

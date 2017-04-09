@@ -1,6 +1,6 @@
 [root]
-name = "rxor"
-version = "0.1.0"
+name = "xor"
+version = "0.2.0"
 dependencies = [
  "clap 2.21.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-serialize 0.3.23 (registry+https://github.com/rust-lang/crates.io-index)",
