@@ -11,4 +11,3 @@ license = "MIT"
 
 [dependencies]
 clap = "2.21.1"
-rustc-serialize = "0.3.23"
