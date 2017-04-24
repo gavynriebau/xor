@@ -45,7 +45,7 @@ Encrypt the data using the key "12345".
 The `2>/dev/null` is used to omit warnings about the key being too small.
 
 ```bash
-$ xor -k /tmp/key -i lorem_ipsum.txt  2>/dev/null > lorem_ipsum.enc
+$ xor -k /tmp/key -i lorem_ipsum.txt 2>/dev/null > lorem_ipsum.enc
 $ cat lorem_ipsum.enc
 }]AQX*XB@AX*U]_[G*B[GTgTFVe_AVWAoEGATnXBZGVc_UQYcEGPnV\PcDA^[Q*EW^DZx[]W\nXVFZA*DFXTh^@VP~V\XZxT^URdPRX\{DS`~W]]X*PVY\dX_BPdXS^{D[@[eBFAAQ*TJVFVcESG]ZdG_XTgR]XTh^@ZGdXAZ@~S_]DXBQM*TSWZg\]W[i^\@QDPFqXAU@~TZF@xTW[YeCZZxTBAQ]o_VVF\~[]Ce]GC@T~TEQYcEVGFoQZXY\W[YeCWQ@*WGT]T~\FXYkBRF\kEGAOIQVDAoD@G\dE\WVkTQR@iDBZPT~PFZZdB
 A[\nT\GyD\G\dQFXEkCF]eWTZW\kVVGPxD\GXe]^Z@k_[^\nW@@fPP\F@g8
