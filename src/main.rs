@@ -25,6 +25,11 @@ fn main() {
              .short("i")
              .required(false)
              .value_name("FILE"))
+        .arg(Arg::with_name("verbose")
+             .help("Increases the level of feedback given")
+             .long("verbose")
+             .short("v")
+             .required(false))
      .get_matches();
 
     // Read the entire key into memory
@@ -67,7 +72,7 @@ fn main() {
             if key_idx >= key_len {
                 key_idx = key_idx % key_len;
 
-                if !warning_shown {
+                if !warning_shown && matches.is_present("verbose") {
                     warning_shown = true;
                     let _ = writeln!(&mut std::io::stderr(), "Key wasn't long enough and had to be re-used to fully encode data, use a longer key to be secure.");
                 }
