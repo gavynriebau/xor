@@ -7,6 +7,11 @@ use std::path::Path;
 use std::fs::{File, OpenOptions};
 use std::io::{Write, Read};
 
+const ERR_ENCODED_DATA_NOT_UTF8 : &'static str = r#"ERROR: Encoded data isn't printable.
+
+The encoded data couldn't be encoded to valid utf8 and so couldn't be printed to the screen.
+Use the "-o" option to write the output directly to a file instead."#;
+
 fn get_key_bytes<'a>(matches: &'a ArgMatches<'a>) -> Vec<u8> {
     let mut key_bytes : Vec<u8> = Vec::new();
 
@@ -33,8 +38,10 @@ fn write_encoded_bytes<'a>(matches : &'a ArgMatches<'a>, encoded_bytes : Vec<u8>
         let _ = output.write_all(encoded_bytes.as_slice());
         output.flush().unwrap();
     } else {
-        let encoded = String::from_utf8(encoded_bytes).unwrap();
-        println!("{}", encoded);
+        match String::from_utf8(encoded_bytes) {
+            Ok(encoded) => println!("{}", encoded),
+            Err(e) => println!("{}\n\nDetails: {}", ERR_ENCODED_DATA_NOT_UTF8, e)
+        }
     }
 }
 
@@ -42,7 +49,7 @@ fn main() {
 
     // Parse arguments and provide help.
     let matches = App::new("xor")
-        .version("1.1.1")
+        .version("1.2.0")
         .about("XORs input against a provided key")
         .author("Gavyn Riebau")
         .arg(Arg::with_name("key")
