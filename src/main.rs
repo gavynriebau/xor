@@ -4,7 +4,7 @@ extern crate clap;
 use clap::{App, Arg, ArgMatches};
 use std::io;
 use std::path::Path;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{Write, Read};
 
 fn get_key_bytes<'a>(matches: &'a ArgMatches<'a>) -> Vec<u8> {
@@ -22,6 +22,22 @@ fn get_key_bytes<'a>(matches: &'a ArgMatches<'a>) -> Vec<u8> {
     key_bytes
 }
 
+fn write_encoded_bytes<'a>(matches : &'a ArgMatches<'a>, encoded_bytes : Vec<u8>) {
+    if matches.is_present("output") {
+        let mut output = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(matches.value_of("output").unwrap())
+            .unwrap();
+        let _ = output.write_all(encoded_bytes.as_slice());
+        output.flush().unwrap();
+    } else {
+        let encoded = String::from_utf8(encoded_bytes).unwrap();
+        println!("{}", encoded);
+    }
+}
+
 fn main() {
 
     // Parse arguments and provide help.
@@ -35,10 +51,16 @@ fn main() {
              .short("k")
              .required(true)
              .value_name("KEY"))
-        .arg(Arg::with_name("file")
+        .arg(Arg::with_name("input")
              .help("The file from which input data will be read, if omitted input will be read from stdin")
              .long("input")
              .short("i")
+             .required(false)
+             .value_name("FILE"))
+        .arg(Arg::with_name("output")
+             .help("The file to which encoded data will be written, if omitted output will be written to stdout.\nIt's recommended to write output to a file for cases where the encoded data contains non-unicode characters.")
+             .long("output")
+             .short("o")
              .required(false)
              .value_name("FILE"))
         .arg(Arg::with_name("verbose")
@@ -54,11 +76,12 @@ fn main() {
     let stdin = io::stdin();
     let mut key_idx = 0;
     let mut warning_shown = false;
+    let mut encoded_bytes: Vec<u8> = Vec::new();
 
     // If the "file" argument was supplied input will be read from the file, otherwise
     // input is read from stdin.
-    let mut input : Box<std::io::Read> = if matches.is_present("file") {
-        Box::new(File::open(matches.value_of("file").unwrap()).unwrap())
+    let mut input : Box<std::io::Read> = if matches.is_present("input") {
+        Box::new(File::open(matches.value_of("input").unwrap()).unwrap())
     } else {
         Box::new(stdin.lock())
     };
@@ -72,8 +95,7 @@ fn main() {
             break;
         }
 
-        let data_bytes = &data[0 .. num_read - 1];
-        let mut encoded_bytes: Vec<u8> = Vec::new();
+        let data_bytes = &data[0 .. num_read];
 
         for b in data_bytes {
             let k = key_bytes[key_idx];
@@ -92,9 +114,7 @@ fn main() {
                 }
             }
         }
-
-        let encoded = String::from_utf8_lossy(encoded_bytes.as_slice());
-
-        println!("{}", encoded);
     }
+
+    write_encoded_bytes(&matches, encoded_bytes);
 }
