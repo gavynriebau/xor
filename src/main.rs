@@ -26,7 +26,7 @@ fn main() {
 
     // Parse arguments and provide help.
     let matches = App::new("xor")
-        .version("1.1.0")
+        .version("1.1.1")
         .about("XORs input against a provided key")
         .author("Gavyn Riebau")
         .arg(Arg::with_name("key")
@@ -46,7 +46,7 @@ fn main() {
              .long("verbose")
              .short("v")
              .required(false))
-     .get_matches();
+         .get_matches();
 
     let key_bytes = get_key_bytes(&matches);
     let key_len = key_bytes.len();
@@ -93,8 +93,8 @@ fn main() {
             }
         }
 
-        let encoded = String::from_utf8(encoded_bytes);
+        let encoded = String::from_utf8_lossy(encoded_bytes.as_slice());
 
-        println!("{}", encoded.unwrap());
+        println!("{}", encoded);
     }
 }
