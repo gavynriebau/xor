@@ -49,7 +49,7 @@ fn main() {
 
     // Parse arguments and provide help.
     let matches = App::new("xor")
-        .version("1.2.0")
+        .version("1.2.1")
         .about("XORs input against a provided key")
         .author("Gavyn Riebau")
         .arg(Arg::with_name("key")
@@ -102,7 +102,7 @@ fn main() {
             break;
         }
 
-        let data_bytes = &data[0 .. num_read];
+        let data_bytes = &data[0 .. num_read - 1];
 
         for b in data_bytes {
             let k = key_bytes[key_idx];
