@@ -1,11 +1,13 @@
 
 extern crate clap;
+extern crate xor_utils;
 
 use clap::{App, Arg, ArgMatches};
 use std::io;
 use std::path::Path;
 use std::fs::{File, OpenOptions};
 use std::io::{Write, Read};
+use xor_utils::Xor;
 
 const ERR_ENCODED_DATA_NOT_UTF8 : &'static str = r#"ERROR: Encoded data isn't printable.
 
@@ -45,50 +47,17 @@ fn main() {
          .get_matches();
 
     let key_bytes = get_key_bytes(&matches);
-    let key_len = key_bytes.len();
-
     let stdin = io::stdin();
-    let mut key_idx = 0;
-    let mut warning_shown = false;
-    let mut encoded_bytes: Vec<u8> = Vec::new();
 
     // If the "file" argument was supplied input will be read from the file, otherwise
     // input is read from stdin.
-    let mut input : Box<std::io::Read> = if matches.is_present("input") {
+    let mut input : Box<Read> = if matches.is_present("input") {
         Box::new(File::open(matches.value_of("input").unwrap()).unwrap())
     } else {
         Box::new(stdin.lock())
     };
 
-    // Iterate each chunk of input data and XOR it against the provided key.
-    loop {
-        let mut data = [0; 1024];
-        let num_read = input.read(&mut data[..]).unwrap();
-
-        if num_read == 0 {
-            break;
-        }
-
-        let data_bytes = &data[0 .. num_read];
-
-        for b in data_bytes {
-            let k = key_bytes[key_idx];
-            let e = b ^ k;
-
-            encoded_bytes.push(e);
-
-            key_idx += 1;
-
-            if key_idx >= key_len {
-                key_idx = key_idx % key_len;
-
-                if !warning_shown && matches.is_present("verbose") {
-                    warning_shown = true;
-                    let _ = writeln!(&mut std::io::stderr(), "Key wasn't long enough and had to be re-used to fully encode data, use a longer key to be secure.");
-                }
-            }
-        }
-    }
+    let encoded_bytes = input.by_ref().xor(key_bytes);
 
     write_encoded_bytes(&matches, encoded_bytes);
 }

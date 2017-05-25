@@ -11,3 +11,4 @@ license = "MIT"
 
 [dependencies]
 clap = "2.21.1"
+xor-utils = "0.1.2"
