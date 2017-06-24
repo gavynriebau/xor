@@ -6,7 +6,7 @@ use clap::{App, Arg, ArgMatches};
 use std::io;
 use std::fs;
 use std::path::Path;
-use std::fs::{File, OpenOptions};
+use std::fs::{File, OpenOptions, DirEntry};
 use std::io::{Write, Read};
 use xor_utils::Xor;
 
@@ -61,11 +61,7 @@ fn main() {
         let starting_dir_name = matches.value_of("recursive").unwrap();
         let starting_dir = Path::new(starting_dir_name);
 
-        if !starting_dir.is_dir() {
-            panic!("Supplied value for option 'recursive' was not a directory.")
-        }
-
-        recursively_encrypt(starting_dir);
+        encrypt_path(starting_dir);
     } else {
         // If the "file" argument was supplied input will be read from the file, otherwise
         // input is read from stdin.
@@ -81,33 +77,48 @@ fn main() {
     }
 }
 
-fn recursively_encrypt(p : &Path) {
-    if p.is_dir() {
-        println!("Path was a directory");
-        match fs::read_dir(p) {
-            Ok(entries) => {
-                for entry in entries {
-                    if let Ok(entry) = entry {
-                        if let Ok(file_type) = entry.file_type() {
-                            println!("{:?} - {:?}", entry.path(), file_type);
-                            if file_type.is_dir() {
-                                let p = &entry.path();
-                                let path = Path::new(p);
-                                recursively_encrypt(path);
-                            }
-                        }
-                    }
-                }
-            },
-            Err(e) => {
-                let mut stderr = io::stderr();
-                let _ = stderr.write_fmt(format_args!("Failed to read directory: {}", e));
-            }
+fn encrypt_path(p : &Path) {
+    for item in fs::read_dir(p).unwrap() {
+        let entry = item.unwrap();
+        encrypt_entry(&entry);
+    }
+}
+
+fn encrypt_entry(entry : &DirEntry) {
+    if let Ok(entry_type) = entry.file_type() {
+        if entry_type.is_dir() {
+            encrypt_dir(entry);
+        } else if entry_type.is_file() {
+            encrypt_file(entry);
+        } else if entry_type.is_symlink() {
+            encrypt_symlink(entry);
         }
-    } else if p.is_file() {
-        println!("Path was a file");
-    } else {
-        println!("Path was something else");
+    }
+}
+
+fn encrypt_file(entry : &DirEntry) {
+    println!("Encrypting file {:?}", entry);
+}
+
+fn encrypt_symlink(entry : &DirEntry) {
+    println!("Encrypting symlink {:?}", entry);
+}
+
+fn encrypt_dir(entry : &DirEntry) {
+    println!("Encrypting dir {:?}", entry);
+
+    match fs::read_dir(entry.path()) {
+        Ok(entries) => {
+            for child in entries {
+                if let Ok(child) = child {
+                    encrypt_entry(&child);
+                }
+            }
+        },
+        Err(e) => {
+            let mut stderr = io::stderr();
+            let _ = stderr.write_fmt(format_args!("Failed to read directory: {}", e));
+        }
     }
 }
 
