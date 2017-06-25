@@ -61,7 +61,7 @@ fn main() {
         let starting_dir_name = matches.value_of("recursive").unwrap();
         let starting_dir = Path::new(starting_dir_name);
 
-        encrypt_path(starting_dir);
+        encrypt_path(starting_dir, &key_bytes);
     } else {
         // If the "file" argument was supplied input will be read from the file, otherwise
         // input is read from stdin.
@@ -71,47 +71,60 @@ fn main() {
             Box::new(stdin.lock())
         };
 
-        let encoded_bytes = input.by_ref().xor(key_bytes);
+        let encoded_bytes = input.by_ref().xor(&key_bytes);
 
         write_encoded_bytes(&matches, encoded_bytes);
     }
 }
 
-fn encrypt_path(p : &Path) {
+fn encrypt_path(p : &Path, key : &Vec<u8>) {
     for item in fs::read_dir(p).unwrap() {
         let entry = item.unwrap();
-        encrypt_entry(&entry);
+        xor_entry(&entry, key);
     }
 }
 
-fn encrypt_entry(entry : &DirEntry) {
+fn xor_entry(entry : &DirEntry, key : &Vec<u8>) {
     if let Ok(entry_type) = entry.file_type() {
         if entry_type.is_dir() {
-            encrypt_dir(entry);
+            xor_dir(entry, key);
         } else if entry_type.is_file() {
-            encrypt_file(entry);
+            xor_file(entry, key);
         } else if entry_type.is_symlink() {
-            encrypt_symlink(entry);
+            xor_symlink(entry, key);
         }
     }
 }
 
-fn encrypt_file(entry : &DirEntry) {
+fn xor_file(entry : &DirEntry, key : &Vec<u8>) {
     println!("Encrypting file {:?}", entry);
+
+    if let Ok(mut file) = File::open(entry.path()) {
+        let mut reader = &mut file as &mut Read;
+        let cypher_text = reader.xor(&key);
+
+        let mut writer = OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(entry.path())
+            .unwrap();
+
+        writer.write_all(cypher_text.as_slice()).unwrap();
+    }
 }
 
-fn encrypt_symlink(entry : &DirEntry) {
+fn xor_symlink(entry : &DirEntry, key : &Vec<u8>) {
     println!("Encrypting symlink {:?}", entry);
 }
 
-fn encrypt_dir(entry : &DirEntry) {
+fn xor_dir(entry : &DirEntry, key : &Vec<u8>) {
     println!("Encrypting dir {:?}", entry);
 
     match fs::read_dir(entry.path()) {
         Ok(entries) => {
             for child in entries {
                 if let Ok(child) = child {
-                    encrypt_entry(&child);
+                    xor_entry(&child, key);
                 }
             }
         },
