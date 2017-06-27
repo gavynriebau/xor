@@ -4,6 +4,10 @@ mod stdout_writer;
 extern crate clap;
 extern crate xor_utils;
 
+#[macro_use] extern crate log;
+extern crate env_logger;
+
+use log::LogLevel;
 use clap::{App, Arg, ArgMatches};
 use std::io;
 use std::fs;
@@ -13,6 +17,7 @@ use std::io::{Write, Read};
 use xor_utils::Xor;
 
 fn main() {
+    env_logger::init().unwrap();
 
     // Parse arguments and provide help.
     let matches = App::new("xor")
@@ -110,7 +115,7 @@ fn xor_entry(entry : &DirEntry, key : &Vec<u8>) {
 }
 
 fn xor_file(entry : &DirEntry, key : &Vec<u8>) {
-    println!("Encrypting file {:?}", entry);
+    info!("Encrypting file {:?}", entry);
 
     if let Ok(mut file) = File::open(entry.path()) {
         let mut reader = &mut file as &mut Read;
@@ -127,11 +132,11 @@ fn xor_file(entry : &DirEntry, key : &Vec<u8>) {
 }
 
 fn xor_symlink(entry : &DirEntry, key : &Vec<u8>) {
-    println!("Encrypting symlink {:?}", entry);
+    info!("Encrypting symlink {:?}", entry);
 }
 
 fn xor_dir(entry : &DirEntry, key : &Vec<u8>) {
-    println!("Encrypting dir {:?}", entry);
+    info!("Encrypting dir {:?}", entry);
 
     match fs::read_dir(entry.path()) {
         Ok(entries) => {

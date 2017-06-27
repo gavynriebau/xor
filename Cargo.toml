@@ -3,7 +3,7 @@ name = "xor"
 description = "CLI app that implements basic XOR encryption/decryption"
 keywords = ["XOR", "encryption", "decryption", "CLI", "terminal"]
 categories = ["cryptography", "command-line-utilities"]
-version = "1.2.2"
+version = "1.3.0"
 authors = ["gavyn <gavyn.riebau@gmail.com>"]
 documentation = "https://github.com/gavynriebau/xor"
 homepage = "https://github.com/gavynriebau/xor"
@@ -11,4 +11,6 @@ license = "MIT"
 
 [dependencies]
 clap = "2.21.1"
-xor-utils = "0.1.3"
+xor-utils = "0.6.0"
+log = "0.3.8"
+env_logger = "0.4.3"
