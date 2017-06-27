@@ -1,4 +1,6 @@
 
+mod stdout_writer;
+
 extern crate clap;
 extern crate xor_utils;
 
@@ -9,11 +11,6 @@ use std::path::Path;
 use std::fs::{File, OpenOptions, DirEntry};
 use std::io::{Write, Read};
 use xor_utils::Xor;
-
-const ERR_ENCODED_DATA_NOT_UTF8 : &'static str = r#"ERROR: Encoded data isn't printable.
-
-The encoded data couldn't be encoded to valid utf8 and so couldn't be printed to the screen.
-Use the "-o" option to write the output directly to a file instead."#;
 
 fn main() {
 
@@ -54,7 +51,6 @@ fn main() {
          .get_matches();
 
     let key_bytes = get_key_bytes(&matches);
-    let stdin = io::stdin();
 
     if matches.is_present("recursive") {
         // Recursively encrypt files and folders in the specified directory.
@@ -65,16 +61,33 @@ fn main() {
     } else {
         // If the "file" argument was supplied input will be read from the file, otherwise
         // input is read from stdin.
-        let mut input : Box<Read> = if matches.is_present("input") {
+        let input : Box<Read> = if matches.is_present("input") {
             Box::new(File::open(matches.value_of("input").unwrap()).unwrap())
         } else {
-            Box::new(stdin.lock())
+            Box::new(io::stdin())
         };
 
-        let encoded_bytes = input.by_ref().xor(&key_bytes);
+        // If "output" argument was supplied output will be written to a file, otherwise
+        // it's written to stdout.
+        let output : Box<Write> = if matches.is_present("output") {
+            Box::new(OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(matches.value_of("output").unwrap())
+                .unwrap())
+        } else {
+            Box::new(stdout_writer::StdoutWriter{})
+        };
 
-        write_encoded_bytes(&matches, encoded_bytes);
+        encrypt_reader(input, &key_bytes, output);
     }
+}
+
+fn encrypt_reader(mut input : Box<Read>, key : &Vec<u8>, mut output : Box<Write>) {
+    let encoded_bytes = input.by_ref().xor(&key);
+    let _ = output.write_all(encoded_bytes.as_slice());
+    output.flush().unwrap();
 }
 
 fn encrypt_path(p : &Path, key : &Vec<u8>) {
@@ -139,31 +152,15 @@ fn get_key_bytes<'a>(matches: &'a ArgMatches<'a>) -> Vec<u8> {
     let mut key_bytes : Vec<u8> = Vec::new();
 
     let key = matches.value_of("key").unwrap();
+
+    // If the key is a file, read the contents of the file.
+    // Otherwise if key is a string, use the string bytes.
     if Path::new(key).exists() {
-        // Key is a file, read the contents of the file.
         File::open(key).unwrap().read_to_end(&mut key_bytes).unwrap();
     } else {
-        // Key is a string, use the string bytes
         key_bytes = key.to_string().into_bytes();
     }
 
     key_bytes
 }
 
-fn write_encoded_bytes<'a>(matches : &'a ArgMatches<'a>, encoded_bytes : Vec<u8>) {
-    if matches.is_present("output") {
-        let mut output = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(matches.value_of("output").unwrap())
-            .unwrap();
-        let _ = output.write_all(encoded_bytes.as_slice());
-        output.flush().unwrap();
-    } else {
-        match String::from_utf8(encoded_bytes) {
-            Ok(encoded) => println!("{}", encoded),
-            Err(e) => println!("{}\n\nDetails: {}", ERR_ENCODED_DATA_NOT_UTF8, e)
-        }
-    }
-}
