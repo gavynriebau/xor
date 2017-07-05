@@ -3,6 +3,8 @@ mod stdout_writer;
 
 extern crate clap;
 extern crate xor_utils;
+extern crate hex;
+extern crate base64;
 
 #[macro_use] extern crate log;
 extern crate env_logger;
@@ -10,11 +12,15 @@ extern crate env_logger;
 use log::LogLevel;
 use clap::{App, Arg, ArgMatches};
 use std::io;
+use std::io::{Cursor};
 use std::fs;
 use std::path::Path;
 use std::fs::{File, OpenOptions, DirEntry};
 use std::io::{Write, Read};
 use xor_utils::Xor;
+use xor_utils::*;
+use hex::{ToHex};
+
 
 fn main() {
     env_logger::init().unwrap();
@@ -151,6 +157,52 @@ fn xor_dir(entry : &DirEntry, key : &Vec<u8>) {
             let _ = stderr.write_fmt(format_args!("Failed to read directory: {}", e));
         }
     }
+
+    // Encrypt the directory entry itself.
+    let file_name = entry.file_name();
+
+    if let Some(original_name) = file_name.to_str() {
+
+        let mut encrypted = Vec::with_capacity(original_name.len());
+        for (d, k) in original_name.as_bytes().iter().zip(key) {
+            encrypted.push(d ^ k);
+        }
+
+        let hex_name = to_hex(encrypted);
+        let encrypted_name = base64::encode(hex_name.as_slice());
+
+
+        let full_path_buf = entry.path();
+        let full_path = full_path_buf.as_path();
+        let parent_path = full_path.parent().unwrap();
+
+        let src_file_path_buf = parent_path.join(original_name);
+        let dst_file_path_buf = parent_path.join(encrypted_name);
+        let src_file_path = src_file_path_buf.as_path();
+        let dst_file_path = dst_file_path_buf.as_path();
+
+
+        // TODO: REMOVE
+        //println!("full {:?} parent {:?}", full_path, parent);
+        println!("Mv {:?} to {:?}", src_file_path, dst_file_path);
+
+
+
+
+        fs::rename(src_file_path, dst_file_path).unwrap();
+    }
+}
+
+fn to_hex(bytes : Vec<u8>) -> Vec<u8> {
+    static CHARS: &'static [u8] = b"0123456789abcdef";
+
+    let mut v = Vec::with_capacity(bytes.len() * 2);
+    for &byte in bytes.iter() {
+        v.push(CHARS[(byte >> 4) as usize]);
+        v.push(CHARS[(byte & 0xf) as usize]);
+    }
+
+    v
 }
 
 fn get_key_bytes<'a>(matches: &'a ArgMatches<'a>) -> Vec<u8> {
