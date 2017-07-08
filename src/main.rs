@@ -9,17 +9,13 @@ extern crate base64;
 #[macro_use] extern crate log;
 extern crate env_logger;
 
-use log::LogLevel;
 use clap::{App, Arg, ArgMatches};
 use std::io;
-use std::io::{Cursor};
 use std::fs;
 use std::path::Path;
 use std::fs::{File, OpenOptions, DirEntry};
 use std::io::{Write, Read};
 use xor_utils::Xor;
-use xor_utils::*;
-use hex::{ToHex, FromHex};
 
 enum Mode {
     Encrypt,
@@ -195,7 +191,7 @@ fn rename_entry(entry : &DirEntry, key : &Vec<u8>, mode : &Mode) {
     if let Some(original_name) = file_name.to_str() {
         debug!("original_name: {}", original_name);
 
-        let mut key_repeated = repeat_key(key, original_name.len());
+        let key_repeated = repeat_key(key, original_name.len());
 
         let input_bytes = match *mode {
             Mode::Encrypt => original_name.to_string().into_bytes(),
