@@ -27,8 +27,18 @@ fn main() {
 
     // Parse arguments and provide help.
     let matches = App::new("xor")
-        .version("1.3.0")
-        .about("XORs input against a provided key")
+        .version("1.4.0")
+        .about(
+"
+XOR encrypt files or directories using a supplied key.
+
+In it's simplest form, reads input from stdin, encrypts it against a key and writes the result to stdout.
+The \"key\" option can be either a path to a file or a string of characters.
+
+When the \"recursive\" option is used, files under a given directory are recursively encrypted.
+Files are renamed by XORing the original name against the provided key, then hexifying the result.
+To decrypt you must use the \"mode\" option with the value \"d\", files are then renamed by unhexifying then XORing.
+")
         .author("Gavyn Riebau")
         .arg(Arg::with_name("key")
              .help("The file containing the key data, or a provided string, against which input will be XOR'd.\nThis should be larger than the given input data or will need to be repeated to encode the input data.")
@@ -36,10 +46,12 @@ fn main() {
              .short("k")
              .required(true)
              .value_name("KEY"))
+        /*
         .arg(Arg::with_name("force")
              .help("Don't show warning prompt if the key size is too small and key bytes will have to be re-used.\nRe-using key bytes makes the encryption vulnerable to being decrypted.")
              .long("force")
              .short("f"))
+             */
         .arg(Arg::with_name("mode")
              .help("The operating mode (i.e. whether encrypting or decrypting).\nOnly applicable when encrypting directories and affects how the file will be renamed.\nWhen in encrypt mode, names are xor'd then converted to hex strings.\nWhen in decrypt mode, names are parsed from hex strings then xor'd to restore the original name.")
              .long("mode")
@@ -47,7 +59,7 @@ fn main() {
              .possible_values(&["e", "d"])
              .default_value("e"))
         .arg(Arg::with_name("input")
-             .help("The file from which input data will be read, if omitted input will be read from stdin.")
+             .help("The file from which input data will be read, if omitted, and the \"recursive\" option isn't used, input will be read from stdin.")
              .long("input")
              .short("i")
              .required(false)
@@ -56,7 +68,6 @@ fn main() {
              .help("Recursively encrypt / decrypt files and subfolders starting at the given directory.\nFiles and directory names will be encrypted / decrypted according to the \"mode\" argument.\nNames are xor encrypted then converted to a hex string.")
              .long("recursive")
              .short("r")
-             .conflicts_with("output")
              .value_name("DIRECTORY")
              .conflicts_with("input")
              .conflicts_with("output"))
@@ -66,40 +77,41 @@ fn main() {
              .short("o")
              .required(false)
              .value_name("FILE"))
-        .arg(Arg::with_name("verbose")
-             .help("Increases the level of feedback given")
-             .long("verbose")
-             .short("v")
-             .required(false))
          .get_matches();
 
+    // Parse the mode of operation, defaulting to encrypt mode.
+    // The mode is used in conjunction with the "recursive" option and determines how file names
+    // will be processed when renaming files.
+    // When in "encrypt" mode, file names are XOR'd then hexified.
+    // When in "decrypt" mode, file names are unhexified then XOR'd.
     let mode = match matches.value_of("mode").unwrap() {
         "e" => Mode::Encrypt,
         "d" => Mode::Decrypt,
         _ => Mode::Encrypt
     };
 
-
+    // Read all the key bytes into memory.
     let key_bytes = get_key_bytes(&matches);
 
     if matches.is_present("recursive") {
-        // Recursively encrypt files and folders in the specified directory.
+        trace!("Recursively encrypting files and folders.");
+
         let starting_dir_name = matches.value_of("recursive").unwrap();
         let starting_dir = Path::new(starting_dir_name);
 
         encrypt_path(starting_dir, &key_bytes, &mode);
     } else {
-        // If the "file" argument was supplied input will be read from the file, otherwise
-        // input is read from stdin.
+
         let input : Box<Read> = if matches.is_present("input") {
+            trace!("Reading input from a file.");
             Box::new(File::open(matches.value_of("input").unwrap()).unwrap())
         } else {
+            trace!("Reading input from stdin.");
             Box::new(io::stdin())
         };
 
-        // If "output" argument was supplied output will be written to a file, otherwise
-        // it's written to stdout.
         let output : Box<Write> = if matches.is_present("output") {
+            trace!("Writting output to a file.");
             Box::new(OpenOptions::new()
                 .write(true)
                 .create(true)
@@ -107,6 +119,7 @@ fn main() {
                 .open(matches.value_of("output").unwrap())
                 .unwrap())
         } else {
+            trace!("Writting output to stdout.");
             Box::new(stdout_writer::StdoutWriter{})
         };
 
@@ -114,6 +127,8 @@ fn main() {
     }
 }
 
+/// XOR's all the bytes from reader against the provided key then writes the result to the output
+/// writer.
 fn encrypt_reader(mut input : Box<Read>, key : &Vec<u8>, mut output : Box<Write>) {
     let encoded_bytes = input.by_ref().xor(&key);
     let _ = output.write_all(encoded_bytes.as_slice());
@@ -122,50 +137,69 @@ fn encrypt_reader(mut input : Box<Read>, key : &Vec<u8>, mut output : Box<Write>
 
 fn encrypt_path(p : &Path, key : &Vec<u8>, mode : &Mode) {
     for item in fs::read_dir(p).unwrap() {
-        let entry = item.unwrap();
-        xor_entry(&entry, key, mode);
-    }
-}
-
-fn xor_entry(entry : &DirEntry, key : &Vec<u8>, mode : &Mode) {
-    if let Ok(entry_type) = entry.file_type() {
-        if entry_type.is_dir() {
-            xor_dir(entry, key, mode);
-        } else if entry_type.is_file() {
-            xor_file(entry, key, mode);
-        } else if entry_type.is_symlink() {
-            xor_symlink(entry, key, mode);
+        match item {
+            Ok(entry) => xor_entry(&entry, key, mode),
+            Err(err) => info!("Failed to read entry because: {}", err)
         }
     }
 }
 
+fn xor_entry(entry : &DirEntry, key : &Vec<u8>, mode : &Mode) {
+    match entry.file_type() {
+        Ok(entry_type) => {
+            if entry_type.is_dir() {
+                xor_dir(entry, key, mode);
+            } else if entry_type.is_file() {
+                xor_file(entry, key, mode);
+            } else if entry_type.is_symlink() {
+                xor_symlink(entry, key, mode);
+            }
+        },
+        Err(err) => info!("Failed to get filetype for DirEntry {:?} because: {}", entry, err)
+    }
+}
+
 fn xor_file(entry : &DirEntry, key : &Vec<u8>, mode : &Mode) {
-    info!("Encrypting file {:?}", entry);
+    debug!("Encrypting file {:?}", entry);
 
-    if let Ok(mut file) = File::open(entry.path()) {
-        let mut reader = &mut file as &mut Read;
-        let cypher_text = reader.xor(&key);
+    match File::open(entry.path()) {
+        Ok(mut file) => {
+            let mut reader = &mut file as &mut Read;
+            let cypher_text = reader.xor(&key);
 
-        let mut writer = OpenOptions::new()
-            .write(true)
-            .truncate(true)
-            .open(entry.path())
-            .unwrap();
+            let output = OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .open(entry.path());
 
-        writer.write_all(cypher_text.as_slice()).unwrap();
+            match output {
+                Ok(mut writer) => {
+                    match writer.write_all(cypher_text.as_slice()) {
+                        Ok(_) => {},
+                        Err(err) => info!("Failed to write encrypted bytes to file because: {}", err)
+                    }
+                },
+                Err(err) => info!("Failed to open file with truncate option for DirEntry {:?} because: {}", entry, err)
+            }
+        },
+        Err(err) => info!("Failed to open file for DirEntry {:?} because: {}", entry, err)
     }
 
     rename_entry(entry, key, mode);
 }
 
 fn xor_symlink(entry : &DirEntry, key : &Vec<u8>, mode : &Mode) {
-    info!("Encrypting symlink {:?}", entry);
+    debug!("Encrypting symlink {:?}", entry);
+
+
+    // TODO: Follow sym links
+
 
     rename_entry(entry, key, mode);
 }
 
 fn xor_dir(entry : &DirEntry, key : &Vec<u8>, mode : &Mode) {
-    info!("Encrypting dir {:?}", entry);
+    debug!("Encrypting dir {:?}", entry);
 
     match fs::read_dir(entry.path()) {
         Ok(entries) => {
@@ -193,16 +227,21 @@ fn rename_entry(entry : &DirEntry, key : &Vec<u8>, mode : &Mode) {
 
         let key_repeated = repeat_key(key, original_name.len());
 
+        // If in Encrypt mode use the filename as is.
+        // If in Decrypt mode unhexify the filename before getting it's bytes.
         let input_bytes = match *mode {
             Mode::Encrypt => original_name.to_string().into_bytes(),
             Mode::Decrypt => from_hex_string(String::from(original_name))
         };
 
+        // Xor encrypt the name.
         let mut encrypted = Vec::with_capacity(input_bytes.len());
         for (d, k) in input_bytes.iter().zip(key_repeated) {
             encrypted.push(d ^ k);
         }
 
+        // If in Encrypt mode hexify the filename.
+        // If in Decrypt mode just use the filename as is.
         let replaced_name = match *mode {
             Mode::Encrypt => to_hex_string(encrypted),
             Mode::Decrypt => String::from_utf8(encrypted).unwrap()
@@ -220,7 +259,11 @@ fn rename_entry(entry : &DirEntry, key : &Vec<u8>, mode : &Mode) {
         let dst_file_path = dst_file_path_buf.as_path();
 
         debug!("Moving {:?} to {:?}", src_file_path, dst_file_path);
-        fs::rename(src_file_path, dst_file_path).unwrap();
+
+        match fs::rename(src_file_path, dst_file_path) {
+            Ok(_) => {},
+            Err(e) => info!("Failed to rename file because: {}", e)
+        }
     }
 }
 
@@ -293,12 +336,4 @@ mod tests {
     }
 
 }
-
-
-
-
-
-
-
-
 
