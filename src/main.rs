@@ -163,23 +163,36 @@ fn xor_dir(entry : &DirEntry, key : &Vec<u8>) {
 
     if let Some(original_name) = file_name.to_str() {
 
+        println!("original_name: {}", original_name);
+
+        let mut key_repeated = repeat_key(key, original_name.len());
         let mut encrypted = Vec::with_capacity(original_name.len());
-        for (d, k) in original_name.as_bytes().iter().zip(key) {
+        for (d, k) in original_name.as_bytes().iter().zip(key_repeated) {
             encrypted.push(d ^ k);
         }
 
-        let hex_name = to_hex(encrypted);
-        let encrypted_name = base64::encode(hex_name.as_slice());
-
+        let encrypted_name = to_hex_string(encrypted);
+        println!("encrypted_name: {}", encrypted_name);
 
         let full_path_buf = entry.path();
+
         let full_path = full_path_buf.as_path();
+        println!("full_path: {:?}", full_path_buf);
+
         let parent_path = full_path.parent().unwrap();
+        println!("parent_path: {:?}", parent_path);
 
         let src_file_path_buf = parent_path.join(original_name);
+        println!("src_file_path_buf: {:?}", src_file_path_buf);
+
         let dst_file_path_buf = parent_path.join(encrypted_name);
+        println!("dst_file_path_buf: {:?}", dst_file_path_buf);
+
         let src_file_path = src_file_path_buf.as_path();
+        println!("src_file_path: {:?}", src_file_path);
+
         let dst_file_path = dst_file_path_buf.as_path();
+        println!("dst_file_path: {:?}", dst_file_path);
 
 
         // TODO: REMOVE
@@ -193,16 +206,31 @@ fn xor_dir(entry : &DirEntry, key : &Vec<u8>) {
     }
 }
 
-fn to_hex(bytes : Vec<u8>) -> Vec<u8> {
-    static CHARS: &'static [u8] = b"0123456789abcdef";
+/// Create a vector of bytes equal in length to the name of the file.
+/// If the key is too small it'll be repeated to make up the required length.
+fn repeat_key(key : &Vec<u8>, required_len : usize) -> Vec<u8> {
+    let mut key_repeated = Vec::with_capacity(required_len);
 
-    let mut v = Vec::with_capacity(bytes.len() * 2);
-    for &byte in bytes.iter() {
-        v.push(CHARS[(byte >> 4) as usize]);
-        v.push(CHARS[(byte & 0xf) as usize]);
+    while key_repeated.len() < required_len {
+        for &b in key {
+            key_repeated.push(b);
+
+            if key_repeated.len() == required_len {
+                break;
+            }
+        }
     }
 
-    v
+    key_repeated
+}
+
+fn to_hex_string(bytes: Vec<u8>) -> String {
+
+  let strings: Vec<String> = bytes.iter()
+                               .map(|b| format!("{:02X}", b))
+                               .collect();
+
+  strings.join("")
 }
 
 fn get_key_bytes<'a>(matches: &'a ArgMatches<'a>) -> Vec<u8> {
@@ -220,4 +248,27 @@ fn get_key_bytes<'a>(matches: &'a ArgMatches<'a>) -> Vec<u8> {
 
     key_bytes
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn to_hex_string_works() {
+        let input_string = String::from("hello");
+        let input_bytes = input_string.into_bytes();
+
+        let hex_string = to_hex_string(input_bytes);
+        assert_eq!(hex_string, "68656C6C6F");
+    }
+
+}
+
+
+
+
+
+
+
+
 
