@@ -21,6 +21,7 @@ use xor_utils::Xor;
 /// will be processed when renaming files.
 /// When in "encrypt" mode, file names are XOR'd then hexified.
 /// When in "decrypt" mode, file names are unhexified then XOR'd.
+#[derive(PartialEq, Eq)]
 enum Mode {
     Encrypt,
     Decrypt
@@ -42,7 +43,7 @@ fn main() {
 
     // Parse arguments and provide help.
     let matches = App::new("xor")
-        .version("1.4.1")
+        .version("1.4.2")
         .about(ABOUT)
         .author("Gavyn Riebau")
         .arg(Arg::with_name("key")
@@ -98,7 +99,9 @@ fn main() {
         let starting_dir_name = matches.value_of("recursive").unwrap();
         let starting_dir = Path::new(starting_dir_name);
 
-        encrypt_path(starting_dir, &key_bytes, &mode);
+        if mode == Mode::Decrypt || check_sizes(starting_dir, &key_bytes) {
+            encrypt_path(starting_dir, &key_bytes, &mode);
+        }
     } else {
 
         let input : Box<Read> = if matches.is_present("input") {
@@ -309,6 +312,121 @@ fn get_key_bytes<'a>(matches: &'a ArgMatches<'a>) -> Vec<u8> {
     }
 
     key_bytes
+}
+
+/// Recursively searches the supplied path and finds the size of the largest file.
+fn get_largest_file_size(path : &Path) -> u64 {
+    let mut size : u64 = 0;
+
+    // Check if the current file is the largest.
+    if path.is_file() {
+        match path.metadata() {
+            Ok(metadata) => {
+                size = metadata.len();
+            },
+            Err(_) => {
+                size = 0;
+            }
+        }
+    } else if path.is_dir() {
+        // Check if any of the child files are the largest.
+        for entry_result in fs::read_dir(path).unwrap() {
+            if let Ok(entry) = entry_result {
+                let entry_size = get_largest_file_size(entry.path().as_path());
+
+                if entry_size > size {
+                    size = entry_size;
+                }
+            }
+        }
+    }
+
+    size
+}
+
+/// Recursively searches the supplied path and finds the length of the longest file/directory name.
+fn get_longest_name(path : &Path) -> usize {
+    let mut size : usize = 0;
+
+    // Check if the current entry name is the longest.
+    let name = path.file_name().unwrap();
+    let length = name.len();
+
+    if length > size {
+        size = length;
+    }
+
+    if path.is_dir() {
+        // Check if any of the child directory / file names are the longest.
+        for entry_result in fs::read_dir(path).unwrap() {
+            if let Ok(entry) = entry_result {
+                let entry_size = get_longest_name(entry.path().as_path());
+
+                if entry_size > size {
+                    size = entry_size;
+                }
+            }
+        }
+    }
+
+    size
+}
+
+fn check_sizes(starting_directory : &Path, key_bytes : &Vec<u8>) -> bool {
+    let mut should_continue : bool = true;
+
+    let key_size = key_bytes.len();
+    let largest_file_size = get_largest_file_size(starting_directory);
+    let longest_name = get_longest_name(starting_directory);
+
+    if largest_file_size > key_size as u64 || longest_name > key_size {
+        print_keysize_warning(key_size, largest_file_size, longest_name);
+        let answer = show_prompt();
+        should_continue = answer == 'y';
+    }
+
+    should_continue
+}
+
+fn show_prompt() -> char {
+    let mut answer : char = '_';
+
+    while answer != 'y' && answer != 'n' {
+        print!("Do you want to continue? ('y'/'n')?: ");
+        io::stdout().flush().unwrap();
+
+        let mut input = String::new();
+        match io::stdin().read_line(&mut input) {
+            Ok(_) => {
+                answer = input.remove(0);
+            },
+            Err(_) => answer = 'n'
+        }
+    }
+
+    answer
+}
+
+fn print_keysize_warning(key_size : usize, largest_file_size : u64, longest_name : usize) {
+    println!("
+    ================================================================================
+    WARNING: The supplied key is too small to safely encrypt your files.
+    ================================================================================
+
+    You are trying to use a key that is smaller than the largest file or smaller
+    than the longest directory name.
+    If you choose to proceed it's possible your files could be decrypted by
+    someone else.
+
+    It's recommended that you use a key that is larger.
+
+    Sizes (in bytes):
+    {} - Keysize (too small)
+    {} - Largest file
+    {} - Longest file or directory name
+
+    ================================================================================
+    ", key_size, largest_file_size, longest_name);
 }
 
 #[cfg(test)]
