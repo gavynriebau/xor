@@ -52,12 +52,10 @@ fn main() {
              .short("k")
              .required(true)
              .value_name("KEY"))
-        /*
         .arg(Arg::with_name("force")
              .help("Don't show warning prompt if the key size is too small and key bytes will have to be re-used.\nRe-using key bytes makes the encryption vulnerable to being decrypted.")
              .long("force")
              .short("f"))
-             */
         .arg(Arg::with_name("decrypt")
              .help("Decrypt directory names rather than encrypting them.\nApplies when using the \"recursive\" option to encrypt a directory.\nWhen set, directory names are decrypted by unhexifying then XORing.\nWhen not set, directory names are encrypted by XORing then hexifying.")
              .long("decrypt")
@@ -99,7 +97,7 @@ fn main() {
         let starting_dir_name = matches.value_of("recursive").unwrap();
         let starting_dir = Path::new(starting_dir_name);
 
-        if mode == Mode::Decrypt || check_sizes(starting_dir, &key_bytes) {
+        if mode == Mode::Decrypt || matches.is_present("force") || check_sizes(starting_dir, &key_bytes) {
             encrypt_path(starting_dir, &key_bytes, &mode);
         }
     } else {
