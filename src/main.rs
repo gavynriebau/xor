@@ -34,7 +34,7 @@ The \"key\" option can be either a path to a file or a string of characters.
 
 When the \"recursive\" option is used, files under a given directory are recursively encrypted.
 Files are renamed by XORing the original name against the provided key, then hexifying the result.
-To decrypt you must use the \"mode\" option with the value \"d\", files are then renamed by unhexifying then XORing.
+To decrypt you must use the \"decrypt\" flag, files are then renamed by unhexifying then XORing.
 ";
 
 fn main() {
