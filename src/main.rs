@@ -42,7 +42,7 @@ fn main() {
 
     // Parse arguments and provide help.
     let matches = App::new("xor")
-        .version("1.4.0")
+        .version("1.4.1")
         .about(ABOUT)
         .author("Gavyn Riebau")
         .arg(Arg::with_name("key")
