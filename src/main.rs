@@ -17,19 +17,16 @@ use std::fs::{File, OpenOptions, DirEntry};
 use std::io::{Write, Read};
 use xor_utils::Xor;
 
+/// The mode is used in conjunction with the "recursive" option and determines how file names
+/// will be processed when renaming files.
+/// When in "encrypt" mode, file names are XOR'd then hexified.
+/// When in "decrypt" mode, file names are unhexified then XOR'd.
 enum Mode {
     Encrypt,
     Decrypt
 }
 
-fn main() {
-    env_logger::init().unwrap();
-
-    // Parse arguments and provide help.
-    let matches = App::new("xor")
-        .version("1.4.0")
-        .about(
-"
+static ABOUT: &str = "
 XOR encrypt files or directories using a supplied key.
 
 In it's simplest form, reads input from stdin, encrypts it against a key and writes the result to stdout.
@@ -38,7 +35,15 @@ The \"key\" option can be either a path to a file or a string of characters.
 When the \"recursive\" option is used, files under a given directory are recursively encrypted.
 Files are renamed by XORing the original name against the provided key, then hexifying the result.
 To decrypt you must use the \"mode\" option with the value \"d\", files are then renamed by unhexifying then XORing.
-")
+";
+
+fn main() {
+    env_logger::init().unwrap();
+
+    // Parse arguments and provide help.
+    let matches = App::new("xor")
+        .version("1.4.0")
+        .about(ABOUT)
         .author("Gavyn Riebau")
         .arg(Arg::with_name("key")
              .help("The file containing the key data, or a provided string, against which input will be XOR'd.\nThis should be larger than the given input data or will need to be repeated to encode the input data.")
@@ -52,12 +57,10 @@ To decrypt you must use the \"mode\" option with the value \"d\", files are then
              .long("force")
              .short("f"))
              */
-        .arg(Arg::with_name("mode")
-             .help("The operating mode (i.e. whether encrypting or decrypting).\nOnly applicable when encrypting directories and affects how the file will be renamed.\nWhen in encrypt mode, names are xor'd then converted to hex strings.\nWhen in decrypt mode, names are parsed from hex strings then xor'd to restore the original name.")
-             .long("mode")
-             .short("m")
-             .possible_values(&["e", "d"])
-             .default_value("e"))
+        .arg(Arg::with_name("decrypt")
+             .help("Decrypt directory names rather than encrypting them.\nApplies when using the \"recursive\" option to encrypt a directory.\nWhen set, directory names are decrypted by unhexifying then XORing.\nWhen not set, directory names are encrypted by XORing then hexifying.")
+             .long("decrypt")
+             .short("d"))
         .arg(Arg::with_name("input")
              .help("The file from which input data will be read, if omitted, and the \"recursive\" option isn't used, input will be read from stdin.")
              .long("input")
@@ -80,14 +83,10 @@ To decrypt you must use the \"mode\" option with the value \"d\", files are then
          .get_matches();
 
     // Parse the mode of operation, defaulting to encrypt mode.
-    // The mode is used in conjunction with the "recursive" option and determines how file names
-    // will be processed when renaming files.
-    // When in "encrypt" mode, file names are XOR'd then hexified.
-    // When in "decrypt" mode, file names are unhexified then XOR'd.
-    let mode = match matches.value_of("mode").unwrap() {
-        "e" => Mode::Encrypt,
-        "d" => Mode::Decrypt,
-        _ => Mode::Encrypt
+    let mode = if matches.is_present("decrypt") {
+        Mode::Decrypt
+    } else {
+        Mode::Encrypt
     };
 
     // Read all the key bytes into memory.
@@ -191,10 +190,6 @@ fn xor_file(entry : &DirEntry, key : &Vec<u8>, mode : &Mode) {
 fn xor_symlink(entry : &DirEntry, key : &Vec<u8>, mode : &Mode) {
     debug!("Encrypting symlink {:?}", entry);
 
-
-    // TODO: Follow sym links
-
-
     rename_entry(entry, key, mode);
 }
 
@@ -218,8 +213,10 @@ fn xor_dir(entry : &DirEntry, key : &Vec<u8>, mode : &Mode) {
     rename_entry(entry, key, mode);
 }
 
+/// Renames a directory entry.
+/// When "mode" is Mode::Encrypt, the name of the entry is XOR'd then hexlified.
+/// When "mode" is Mode::Decrypt, the name of the entry is unhexlified then XOR'd.
 fn rename_entry(entry : &DirEntry, key : &Vec<u8>, mode : &Mode) {
-    // Encrypt the directory entry itself.
     let file_name = entry.file_name();
 
     if let Some(original_name) = file_name.to_str() {
@@ -286,11 +283,12 @@ fn repeat_key(key : &Vec<u8>, required_len : usize) -> Vec<u8> {
 }
 
 fn to_hex_string(bytes: Vec<u8>) -> String {
-  let strings: Vec<String> = bytes.iter()
-                               .map(|b| format!("{:02X}", b))
-                               .collect();
+    let strings: Vec<String> = bytes
+        .iter()
+        .map(|b| format!("{:02X}", b))
+        .collect();
 
-  strings.join("")
+    strings.join("")
 }
 
 fn from_hex_string(hex : String) -> Vec<u8> {
