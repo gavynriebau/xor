@@ -15,7 +15,6 @@ use std::fs;
 use std::path::Path;
 use std::fs::{File, OpenOptions, DirEntry};
 use std::io::{Write, Read};
-use xor_utils::Xor;
 
 /// The mode is used in conjunction with the "recursive" option and determines how file names
 /// will be processed when renaming files.
@@ -26,6 +25,7 @@ enum Mode {
     Encrypt,
     Decrypt
 }
+
 
 static ABOUT: &str = "
 XOR encrypt files or directories using a supplied key.
@@ -102,14 +102,6 @@ fn main() {
         }
     } else {
 
-        let input : Box<Read> = if matches.is_present("input") {
-            trace!("Reading input from a file.");
-            Box::new(File::open(matches.value_of("input").unwrap()).unwrap())
-        } else {
-            trace!("Reading input from stdin.");
-            Box::new(io::stdin())
-        };
-
         let output : Box<Write> = if matches.is_present("output") {
             trace!("Writting output to a file.");
             Box::new(OpenOptions::new()
@@ -123,16 +115,40 @@ fn main() {
             Box::new(stdout_writer::StdoutWriter{})
         };
 
-        encrypt_reader(input, &key_bytes, output);
+        if matches.is_present("input") {
+            trace!("Reading input from a file.");
+            let file_reader= Box::new(File::open(matches.value_of("input").unwrap()).unwrap());
+            encrypt_reader(file_reader, &key_bytes, output);
+        } else {
+            trace!("Reading input from stdin.");
+            let stdin_reader = Box::new(io::stdin());
+            encrypt_reader(stdin_reader, &key_bytes, output);
+        };
     }
 }
 
 /// XOR's all the bytes from reader against the provided key then writes the result to the output
 /// writer.
 fn encrypt_reader(mut input : Box<Read>, key : &Vec<u8>, mut output : Box<Write>) {
-    let encoded_bytes = input.by_ref().xor(&key);
-    let _ = output.write_all(encoded_bytes.as_slice());
-    output.flush().unwrap();
+    let mut buffer = [0; 512];
+    loop {
+        match input.read(&mut buffer) {
+            Ok(n) => {
+                info!("Read {} bytes", n);
+                if n == 0 {
+                    break;
+                }
+                let key_repeated = repeat_key(key, n);
+                let encoded_bytes : Vec<u8> = buffer.iter().zip(key_repeated).map(|(d, k)| d ^ k).collect();
+                let _ = output.write_all(encoded_bytes.as_slice());
+                output.flush().unwrap();
+            },
+            Err(e) => {
+                error!("Failed to read because: {}", e);
+                break;
+            }
+        }
+    }
 }
 
 fn encrypt_path(p : &Path, key : &Vec<u8>, mode : &Mode) {
@@ -163,23 +179,23 @@ fn xor_file(entry : &DirEntry, key : &Vec<u8>, mode : &Mode) {
     debug!("Encrypting file {:?}", entry);
 
     match File::open(entry.path()) {
-        Ok(mut file) => {
-            let mut reader = &mut file as &mut Read;
-            let cypher_text = reader.xor(&key);
+        Ok(file) => {
+
+            let temp_file_path = entry.path().with_extension("temp");
+            debug!("Creating temporary file: {:?}", temp_file_path);
 
             let output = OpenOptions::new()
+                .create(true)
                 .write(true)
                 .truncate(true)
-                .open(entry.path());
+                .open(&temp_file_path);
 
             match output {
-                Ok(mut writer) => {
-                    match writer.write_all(cypher_text.as_slice()) {
-                        Ok(_) => {},
-                        Err(err) => info!("Failed to write encrypted bytes to file because: {}", err)
-                    }
+                Ok(writer) => {
+                    encrypt_reader(Box::new(file), &key, Box::new(writer));
+                    std::fs::rename(temp_file_path, entry.path()).unwrap();
                 },
-                Err(err) => info!("Failed to open file with truncate option for DirEntry {:?} because: {}", entry, err)
+                Err(err) => info!("Failed to open file with truncate option for DirEntry {:?} because: {}", temp_file_path, err)
             }
         },
         Err(err) => info!("Failed to open file for DirEntry {:?} because: {}", entry, err)
