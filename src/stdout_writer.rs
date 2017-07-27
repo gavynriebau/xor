@@ -13,7 +13,11 @@ pub struct StdoutWriter;
 impl Write for StdoutWriter {
     fn write(&mut self, buf: &[u8]) -> Result<usize, io::Error> {
         match String::from_utf8(Vec::from(buf)) {
-            Ok(encoded) => println!("{}", encoded),
+            Ok(encoded) => {
+                let mut out = io::stdout();
+                out.write_all(encoded.as_bytes()).unwrap();
+                let _ = out.flush();
+            },
             Err(e) => println!("{}\n\nDetails: {}", ERR_ENCODED_DATA_NOT_UTF8, e)
         }
         Ok(buf.len())
