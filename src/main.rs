@@ -10,11 +10,12 @@ extern crate base64;
 extern crate env_logger;
 
 use clap::{App, Arg, ArgMatches};
+use std::ops::{DerefMut};
 use std::io;
 use std::fs;
 use std::path::Path;
 use std::fs::{File, OpenOptions, DirEntry};
-use std::io::{Write, Read};
+use std::io::{Write, Read, Cursor};
 
 /// The mode is used in conjunction with the "recursive" option and determines how file names
 /// will be processed when renaming files.
@@ -102,7 +103,7 @@ fn main() {
         }
     } else {
 
-        let output : Box<Write> = if matches.is_present("output") {
+        let mut output : Box<Write> = if matches.is_present("output") {
             trace!("Writting output to a file.");
             Box::new(OpenOptions::new()
                 .write(true)
@@ -117,19 +118,19 @@ fn main() {
 
         if matches.is_present("input") {
             trace!("Reading input from a file.");
-            let file_reader= Box::new(File::open(matches.value_of("input").unwrap()).unwrap());
-            encrypt_reader(file_reader, &key_bytes, output);
+            let mut file_reader= File::open(matches.value_of("input").unwrap()).unwrap();
+            encrypt_reader(&mut file_reader, &key_bytes, output.deref_mut());
         } else {
             trace!("Reading input from stdin.");
-            let stdin_reader = Box::new(io::stdin());
-            encrypt_reader(stdin_reader, &key_bytes, output);
+            let mut stdin_reader = io::stdin();
+            encrypt_reader(&mut stdin_reader, &key_bytes, output.deref_mut());
         };
     }
 }
 
 /// XOR's all the bytes from reader against the provided key then writes the result to the output
 /// writer.
-fn encrypt_reader(mut input : Box<Read>, key : &Vec<u8>, mut output : Box<Write>) {
+fn encrypt_reader(input : &mut Read, key : &Vec<u8>, output : &mut Write) {
     let mut buffer = [0; 512];
     loop {
         match input.read(&mut buffer) {
@@ -179,23 +180,26 @@ fn xor_file(entry : &DirEntry, key : &Vec<u8>, mode : &Mode) {
     debug!("Encrypting file {:?}", entry);
 
     match File::open(entry.path()) {
-        Ok(file) => {
+        Ok(mut file) => {
 
-            let temp_file_path = entry.path().with_extension("temp");
-            debug!("Creating temporary file: {:?}", temp_file_path);
+            let meta_data = file.metadata().unwrap();
+            let mut buffer : Cursor<Vec<u8>> = Cursor::new(Vec::with_capacity(meta_data.len() as usize));
+
+            encrypt_reader(&mut file, &key, &mut buffer);
 
             let output = OpenOptions::new()
                 .create(true)
                 .write(true)
                 .truncate(true)
-                .open(&temp_file_path);
+                .open(entry.path());
 
             match output {
-                Ok(writer) => {
-                    encrypt_reader(Box::new(file), &key, Box::new(writer));
-                    std::fs::rename(temp_file_path, entry.path()).unwrap();
+                Ok(mut writer) => {
+                    let _ = writer.write_all(buffer.get_mut());
+                    //let cloned_buffer = raw_buffer.clone();
+                    //std::fs::rename(temp_file_path, entry.path()).unwrap();
                 },
-                Err(err) => info!("Failed to open file with truncate option for DirEntry {:?} because: {}", temp_file_path, err)
+                Err(err) => info!("Failed to open file with truncate option for DirEntry {:?} because: {}", entry.path(), err)
             }
         },
         Err(err) => info!("Failed to open file for DirEntry {:?} because: {}", entry, err)
