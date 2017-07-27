@@ -5,6 +5,7 @@ extern crate clap;
 extern crate xor_utils;
 extern crate hex;
 extern crate base64;
+extern crate number_prefix;
 
 #[macro_use] extern crate log;
 extern crate env_logger;
@@ -16,6 +17,7 @@ use std::fs;
 use std::path::Path;
 use std::fs::{File, OpenOptions, DirEntry};
 use std::io::{Write, Read, Cursor};
+use number_prefix::{binary_prefix, Standalone, Prefixed};
 
 /// The mode is used in conjunction with the "recursive" option and determines how file names
 /// will be processed when renaming files.
@@ -427,24 +429,33 @@ fn show_prompt() -> char {
 
 fn print_keysize_warning(key_size : usize, largest_file_size : u64, longest_name : usize) {
     println!("
-    ================================================================================
-    WARNING: The supplied key is too small to safely encrypt your files.
-    ================================================================================
+================================================================================
+WARNING: The supplied key is too small to safely encrypt your files.
+================================================================================
 
-    You are trying to use a key that is smaller than the largest file or smaller
-    than the longest directory name.
-    If you choose to proceed it's possible your files could be decrypted by
-    someone else.
+You are trying to use a key that is smaller than the largest file or smaller
+than the longest directory name.
+If you choose to proceed it's possible your files could be decrypted by
+someone else.
 
-    It's recommended that you use a key that is larger.
+It's recommended that you use a key that is larger.
 
-    Sizes (in bytes):
-    {} - Keysize (too small)
-    {} - Largest file
-    {} - Longest file or directory name
+Sizes:");
 
-    ================================================================================
-    ", key_size, largest_file_size, longest_name);
+    match binary_prefix(key_size as f64) {
+        Standalone(n)       => println!("{:>7} {:5} - Keysize (too small)", n, "Bytes"),
+        Prefixed(prefix, n) => println!("{:>4.3} {}B   - Keysize (too small)", n, prefix)
+    }
+    match binary_prefix(largest_file_size as f64) {
+        Standalone(n)       => println!("{:>7} {:5} - Largest file", n, "Bytes"),
+        Prefixed(prefix, n) => println!("{:>7.3} {}B   - Largest file", n, prefix)
+    }
+    match binary_prefix(longest_name as f64) {
+        Standalone(n)       => println!("{:>7} {:5} - Longest file or directory name", n, "Bytes"),
+        Prefixed(prefix, n) => println!("{:>4.3} {}B   - Longest file or directory name", n, prefix)
+    }
+
+    println!("\n================================================================================");
 }
 
 #[cfg(test)]
