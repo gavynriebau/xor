@@ -469,5 +469,21 @@ mod tests {
         assert_eq!(expected_bytes, ascii_bytes);
     }
 
+    #[test]
+    fn encrypt_reader_works() {
+        let input = "hello";
+        let expected = "Q\\UUV";
+
+        let mut reader = Cursor::new(input.as_bytes());
+        let key_bytes = vec![57;1];
+        let mut writer : Cursor<Vec<u8>> = Cursor::new(Vec::new());
+
+        encrypt_reader(&mut reader, &key_bytes, &mut writer);
+
+        let cipher_text = String::from_utf8(writer.into_inner()).unwrap();
+
+        assert_eq!(expected, cipher_text);
+    }
+
 }
 
