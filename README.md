@@ -17,7 +17,7 @@ $ cargo install xor
 ## Help
 ```bash
 $ xor --help
-xor 1.4.0
+xor 1.4.4
 Gavyn Riebau
 
 XOR encrypt files or directories using a supplied key.
@@ -27,12 +27,18 @@ The "key" option can be either a path to a file or a string of characters.
 
 When the "recursive" option is used, files under a given directory are recursively encrypted.
 Files are renamed by XORing the original name against the provided key, then hexifying the result.
-To decrypt you must use the "mode" option with the value "d", files are then renamed by unhexifying then XORing.
+To decrypt you must use the "decrypt" flag, files are then renamed by unhexifying then XORing.
 
 USAGE:
-    xor [OPTIONS] --key <KEY>
+    xor [FLAGS] [OPTIONS] --key <KEY>
 
 FLAGS:
+    -d, --decrypt    Decrypt directory names rather than encrypting them.
+                     Applies when using the "recursive" option to encrypt a directory.
+                     When set, directory names are decrypted by unhexifying then XORing.
+                     When not set, directory names are encrypted by XORing then hexifying.
+    -f, --force      Don't show warning prompt if the key size is too small and key bytes will have to be re-used.
+                     Re-using key bytes makes the encryption vulnerable to being decrypted.
     -h, --help       Prints help information
     -V, --version    Prints version information
 
@@ -40,10 +46,6 @@ OPTIONS:
     -i, --input <FILE>             The file from which input data will be read, if omitted, and the "recursive" option isn't used, input will be read from stdin.
     -k, --key <KEY>                The file containing the key data, or a provided string, against which input will be XOR'd.
                                    This should be larger than the given input data or will need to be repeated to encode the input data.
-    -m, --mode <mode>              The operating mode (i.e. whether encrypting or decrypting).
-                                   Only applicable when encrypting directories and affects how the file will be renamed.
-                                   When in encrypt mode, names are xor'd then converted to hex strings.
-                                   When in decrypt mode, names are parsed from hex strings then xor'd to restore the original name. [default: e]  [values: e, d]
     -o, --output <FILE>            The file to which encoded data will be written, if omitted output will be written to stdout.
                                    It's recommended to write output to a file for cases where the encoded data contains non-unicode characters which would otherwise not be printed to the console.
     -r, --recursive <DIRECTORY>    Recursively encrypt / decrypt files and subfolders starting at the given directory.
@@ -116,7 +118,7 @@ $ ls -R
 
 Recursively decrypt all files and child directories.
 ```bash
-$ xor -k "12345" -r . -m d
+$ xor -k "12345" -r . -d
 $ ls -R
 directory_one
 directory_two
