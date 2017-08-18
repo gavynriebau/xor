@@ -369,21 +369,22 @@ fn get_longest_name(path : &Path) -> usize {
     let mut size : usize = 0;
 
     // Check if the current entry name is the longest.
-    let name = path.file_name().unwrap();
-    let length = name.len();
+    if let Some(name) = path.file_name() {
+        let length = name.len();
 
-    if length > size {
-        size = length;
-    }
+        if length > size {
+            size = length;
+        }
 
-    if path.is_dir() {
-        // Check if any of the child directory / file names are the longest.
-        for entry_result in fs::read_dir(path).unwrap() {
-            if let Ok(entry) = entry_result {
-                let entry_size = get_longest_name(entry.path().as_path());
+        if path.is_dir() {
+            // Check if any of the child directory / file names are the longest.
+            for entry_result in fs::read_dir(path).unwrap() {
+                if let Ok(entry) = entry_result {
+                    let entry_size = get_longest_name(entry.path().as_path());
 
-                if entry_size > size {
-                    size = entry_size;
+                    if entry_size > size {
+                        size = entry_size;
+                    }
                 }
             }
         }
