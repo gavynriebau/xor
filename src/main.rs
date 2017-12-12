@@ -184,30 +184,13 @@ fn encrypt_reader(input : &mut Read, key : &Vec<u8>, output : &mut Write) {
 fn xor_file<T : FileSystem>(fs : &T, file_path : &Path, key : &Vec<u8>, mode : &Mode) {
     debug!("Encrypting file {:?}", file_path);
 
-    // match file_path.metadata() {
-    //     Ok(metadata) => {
-    //         let mut buffer : Cursor<Vec<u8>> = Cursor::new(Vec::with_capacity(metadata.len() as usize));
+    let file_bytes = fs.read_file(file_path).unwrap();
+    let key_repeated = repeat_key(key, file_bytes.len() as usize);
+    let encrypted_bytes : Vec<u8> = file_bytes.iter().zip(key_repeated).map(|(d, k)| d ^ k).collect();
 
-    //         encrypt_reader(&mut file, &key, &mut buffer);
+    fs.overwrite_file(file_path, encrypted_bytes).unwrap();
 
-    //         let output_options = OpenOptions::new()
-    //             .create(true)
-    //             .write(true)
-    //             .truncate(true);
-
-    //         match file_path.open_with_options(output_options) {
-    //             Ok(mut writer) => {
-    //                 let _ = writer.write_all(buffer.get_mut());
-    //                 //let cloned_buffer = raw_buffer.clone();
-    //                 //std::fs::rename(temp_file_path, entry.path()).unwrap();
-    //             },
-    //             Err(err) => info!("Failed to open file with truncate option for DirEntry {:?} because: {}", entry.path(), err)
-    //         }
-    //     },
-    //     Err(err) => info!("Failed to read metadata of file at path {:?} because: {}", file_path, err)
-    // }
-
-   rename_entry(fs, file_path, key, mode);
+    rename_entry(fs, file_path, key, mode);
 }
 
 // fn xor_symlink(entry : &DirEntry, key : &Vec<u8>, mode : &Mode) {
@@ -510,27 +493,57 @@ mod tests {
     }
 
     #[test]
-    fn xor_file_works() {
+    fn xor_file_encrypt_mode_works() {
         // Arrange.
 
         // Setup the input file
         let fs = FakeFileSystem::new();
         let root = fs.current_dir().unwrap();
         let input_path = root.join("input.txt");
+        let output_path = root.join("2E2937323369333F33");
         let input_data = "hello world".as_bytes();
+        let key = vec![71];
+        let mode = Mode::Encrypt;
+
+        // Act.
+        fs.create_file(&input_path, input_data).unwrap();
+
+        xor_file(&fs, &input_path, &key, &mode);
+
+        // Assert.
+        let mut filenames = get_root_files(&fs);
+        let encrypted_bytes = fs.read_file(output_path).unwrap();
+
+        // Filename is XOR'd against the key then encoded to hex
+        assert_eq!(filenames, vec!["/2E2937323369333F33"]);
+        assert_eq!(encrypted_bytes, vec![0x2f_u8, 0x22_u8, 0x2b_u8, 0x2b_u8, 0x28_u8, 0x67_u8, 0x30_u8, 0x28_u8, 0x35_u8, 0x2b_u8, 0x23_u8]);
+    }
+
+    #[test]
+    fn xor_file_decrypt_mode_works() {
+        // Arrange.
+
+        // Setup the input file
+        let fs = FakeFileSystem::new();
+        let root = fs.current_dir().unwrap();
+        let input_path = root.join("2E2937323369333F33");
+        let output_path = root.join("input.txt");
+        let input_data = vec![0x2f_u8, 0x22_u8, 0x2b_u8, 0x2b_u8, 0x28_u8, 0x67_u8, 0x30_u8, 0x28_u8, 0x35_u8, 0x2b_u8, 0x23_u8];
         fs.create_file(&input_path, input_data).unwrap();
 
         let key = vec![71];
-        let mode = Mode::Encrypt;
+        let mode = Mode::Decrypt;
 
         // Act.
         xor_file(&fs, &input_path, &key, &mode);
 
         // Assert.
         let mut filenames = get_root_files(&fs);
+        let encrypted_bytes = fs.read_file(output_path).unwrap();
 
         // Filename is XOR'd against the key then encoded to hex
-        assert_eq!(filenames, vec!["/2E2937323369333F33"]);
+        assert_eq!(filenames, vec!["/input.txt"]);
+        assert_eq!(encrypted_bytes, "hello world".as_bytes());
     }
 
 }
