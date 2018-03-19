@@ -199,7 +199,7 @@ fn xor_file<T : FileSystem>(fs : &T, file_path : &Path, key : &Vec<u8>, mode : &
 //     rename_entry(entry, key, mode);
 // }
 
-// fn xor_dir(entry : &DirEntry, key : &Vec<u8>, mode : &Mode) {
+fn xor_dir<T : FileSystem>(fs : &T, dir_path : &Path, key : &Vec<u8>, mode : &Mode) {
 //     debug!("Encrypting dir {:?}", entry);
 
 //     match fs::read_dir(entry.path()) {
@@ -217,7 +217,7 @@ fn xor_file<T : FileSystem>(fs : &T, file_path : &Path, key : &Vec<u8>, mode : &
 //     }
 
 //     rename_entry(entry, key, mode);
-// }
+}
 
 /// Renames a directory entry.
 /// When "mode" is Mode::Encrypt, the name of the entry is XOR'd then hexlified.
@@ -544,6 +544,41 @@ mod tests {
         // Filename is XOR'd against the key then encoded to hex
         assert_eq!(filenames, vec!["/input.txt"]);
         assert_eq!(encrypted_bytes, "hello world".as_bytes());
+    }
+
+    #[test]
+    fn xor_directory_encrypt_mode_works() {
+        // Arrange.
+        let key = vec![71];
+
+        // Make a filesystem as follows:
+        //
+        // parent_dir
+        //    |-- child_dir
+        //    |     |-- file_a
+        //    |     |-- file_b
+        //    |-- file_c
+        let fs = FakeFileSystem::new();
+        let root = fs.current_dir().unwrap();
+        let file_a_contents : [u8; 5] = [1_u8, 2_u8, 3_u8, 4_u8, 5_u8];
+        let file_b_contents : [u8; 5] = [6_u8, 7_u8, 8_u8, 9_u8, 10_u8];
+        let file_c_contents : [u8; 5] = [11_u8, 12_u8, 13_u8, 14_u8, 15_u8];
+        fs.create_dir(Path::new("parent_dir")).unwrap();
+        fs.create_dir(Path::new("parent_dir/child_dir")).unwrap();
+        fs.create_file(Path::new("parent_dir/child_dir/file_a"), file_a_contents).unwrap();
+        fs.create_file(Path::new("parent_dir/child_dir/file_b"), file_b_contents).unwrap();
+        fs.create_file(Path::new("parent_dir/file_c"), file_c_contents).unwrap();
+
+        xor_dir(&fs, &root, &key, &Mode::Encrypt);
+
+        assert!(fs.is_dir(Path::new("37263522293318232e35")));                                  // parent_dir -> 37263522293318232e35
+        assert!(fs.is_dir(Path::new("37263522293318232e35/242f2e2b2318232e35")));               // parent_dir/child_dir -> 37263522293318232e35/242f2e2b2318232e35
+        assert!(fs.is_file(Path::new("37263522293318232e35/242f2e2b2318232e35/212e2b221826"))); // parent_dir/child_dir/file_a -> 37263522293318232e35/242f2e2b2318232e35/212e2b221826
+        assert!(fs.is_file(Path::new("37263522293318232e35/242f2e2b2318232e35/212e2b221825"))); // parent_dir/child_dir/file_b -> 37263522293318232e35/242f2e2b2318232e35/212e2b221825
+        assert!(fs.is_file(Path::new("37263522293318232e35/212e2b221824")));                    // parent_dir/file_c -> 37263522293318232e35/212e2b221824
+
+        // TODO: Assert contents are XOR'd
+
     }
 
 }
