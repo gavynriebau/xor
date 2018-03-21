@@ -18,6 +18,7 @@ use std::path::Path;
 use std::io::{Write, Read, Cursor};
 use number_prefix::{binary_prefix, Standalone, Prefixed};
 use filesystem::{FileSystem, DirEntry};
+use std::ops::Deref;
 
 /// The mode is used in conjunction with the "recursive" option and determines how file names
 /// will be processed when renaming files.
@@ -200,23 +201,34 @@ fn xor_file<T : FileSystem>(fs : &T, file_path : &Path, key : &Vec<u8>, mode : &
 // }
 
 fn xor_dir<T : FileSystem>(fs : &T, dir_path : &Path, key : &Vec<u8>, mode : &Mode) {
-//     debug!("Encrypting dir {:?}", entry);
+     debug!("Encrypting dir {:?}", dir_path);
 
-//     match fs::read_dir(entry.path()) {
-//         Ok(entries) => {
-//             for child in entries {
-//                 if let Ok(child) = child {
-//                     xor_entry(&child, key, mode);
-//                 }
-//             }
-//         },
-//         Err(e) => {
-//             let mut stderr = io::stderr();
-//             let _ = stderr.write_fmt(format_args!("Failed to read directory: {}", e));
-//         }
-//     }
+     for child in fs.read_dir(dir_path).unwrap() {
+         let child_pathbuf = child.unwrap().path();
+         let child_path = child_pathbuf.deref();
 
-//     rename_entry(entry, key, mode);
+         if fs.is_dir(child_path) {
+             xor_dir(fs, child_path, key, mode);
+         }
+     }
+
+     for child in fs.read_dir(dir_path).unwrap() {
+         let child_pathbuf = child.unwrap().path();
+         let child_path = child_pathbuf.deref();
+
+         if fs.is_file(child_path) {
+             xor_file(fs, child_path, key, mode);
+         }
+     }
+
+    for child in fs.read_dir(dir_path).unwrap() {
+         let child_pathbuf = child.unwrap().path();
+         let child_path = child_pathbuf.deref();
+
+         if fs.is_dir(child_path) {
+             rename_entry(fs, child_path, key, mode);
+         }
+     }
 }
 
 /// Renames a directory entry.
@@ -257,7 +269,10 @@ fn rename_entry<T : FileSystem>(fs : &T, entry : &Path, key : &Vec<u8>, mode : &
 
         debug!("Moving {:?} to {:?}", src_file_path, dst_file_path);
 
-        fs.rename(src_file_path, dst_file_path).unwrap();
+        match fs.rename(&src_file_path, &dst_file_path) {
+            Ok(()) => trace!("Renamed path '{:?}' to '{:?}'", &src_file_path, &dst_file_path),
+            Err(e) => error!("Failed to rename '{:?}' to '{:?}' because: {}", &src_file_path, &dst_file_path, e)
+        }
     }
 }
 
@@ -563,22 +578,31 @@ mod tests {
         let file_a_contents : [u8; 5] = [1_u8, 2_u8, 3_u8, 4_u8, 5_u8];
         let file_b_contents : [u8; 5] = [6_u8, 7_u8, 8_u8, 9_u8, 10_u8];
         let file_c_contents : [u8; 5] = [11_u8, 12_u8, 13_u8, 14_u8, 15_u8];
-        fs.create_dir(Path::new("parent_dir")).unwrap();
-        fs.create_dir(Path::new("parent_dir/child_dir")).unwrap();
-        fs.create_file(Path::new("parent_dir/child_dir/file_a"), file_a_contents).unwrap();
-        fs.create_file(Path::new("parent_dir/child_dir/file_b"), file_b_contents).unwrap();
-        fs.create_file(Path::new("parent_dir/file_c"), file_c_contents).unwrap();
+        let file_a_contents_expected : [u8; 5] = [70_u8, 69_u8, 68_u8, 67_u8, 66_u8];
+        let file_b_contents_expected : [u8; 5] = [65_u8, 64_u8, 79_u8, 78_u8, 77_u8];
+        let file_c_contents_expected : [u8; 5] = [76_u8, 75_u8, 74_u8, 73_u8, 72_u8];
+        fs.create_dir(Path::new("/parent_dir")).unwrap();
+        fs.create_dir(Path::new("/parent_dir/child_dir")).unwrap();
+        fs.create_file(Path::new("/parent_dir/child_dir/file_a"), file_a_contents).unwrap();
+        fs.create_file(Path::new("/parent_dir/child_dir/file_b"), file_b_contents).unwrap();
+        fs.create_file(Path::new("/parent_dir/file_c"), file_c_contents).unwrap();
 
         xor_dir(&fs, &root, &key, &Mode::Encrypt);
 
-        assert!(fs.is_dir(Path::new("37263522293318232e35")));                                  // parent_dir -> 37263522293318232e35
-        assert!(fs.is_dir(Path::new("37263522293318232e35/242f2e2b2318232e35")));               // parent_dir/child_dir -> 37263522293318232e35/242f2e2b2318232e35
-        assert!(fs.is_file(Path::new("37263522293318232e35/242f2e2b2318232e35/212e2b221826"))); // parent_dir/child_dir/file_a -> 37263522293318232e35/242f2e2b2318232e35/212e2b221826
-        assert!(fs.is_file(Path::new("37263522293318232e35/242f2e2b2318232e35/212e2b221825"))); // parent_dir/child_dir/file_b -> 37263522293318232e35/242f2e2b2318232e35/212e2b221825
-        assert!(fs.is_file(Path::new("37263522293318232e35/212e2b221824")));                    // parent_dir/file_c -> 37263522293318232e35/212e2b221824
+        assert!(fs.is_dir(Path::new("/37263522293318232E35")));                                  // parent_dir -> 37263522293318232E35
+        assert!(fs.is_dir(Path::new("/37263522293318232E35/242F2E2B2318232E35")));               // parent_dir/child_dir -> 37263522293318232E35/242F2E2B2318232E35
+        assert!(fs.is_file(Path::new("/37263522293318232E35/242F2E2B2318232E35/212E2B221826"))); // parent_dir/child_dir/file_a -> 37263522293318232E35/242F2E2B2318232E35/212E2B221826
+        assert!(fs.is_file(Path::new("/37263522293318232E35/242F2E2B2318232E35/212E2B221825"))); // parent_dir/child_dir/file_b -> 37263522293318232E35/242F2E2B2318232E35/212E2B221825
+        assert!(fs.is_file(Path::new("/37263522293318232E35/212E2B221824")));                    // parent_dir/file_c -> 37263522293318232E35/212E2B221824
 
-        // TODO: Assert contents are XOR'd
+        // Assert contents are XOR'd
+        let file_a_contents_actual = fs.read_file(Path::new("/37263522293318232E35/242F2E2B2318232E35/212E2B221826")).unwrap();
+        let file_b_contents_actual = fs.read_file(Path::new("/37263522293318232E35/242F2E2B2318232E35/212E2B221825")).unwrap();
+        let file_c_contents_actual = fs.read_file(Path::new("/37263522293318232E35/212E2B221824")).unwrap();
 
+        assert_eq!(file_a_contents_actual, file_a_contents_expected);
+        assert_eq!(file_b_contents_actual, file_b_contents_expected);
+        assert_eq!(file_c_contents_actual, file_c_contents_expected);
     }
 
 }
